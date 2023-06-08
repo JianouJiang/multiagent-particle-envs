@@ -318,6 +318,7 @@ class Image(Geom):
 
 # ================================================================
 
+        
 class SimpleImageViewer(object):
     def __init__(self, display=None):
         self.window = None
@@ -343,3 +344,4 @@ class SimpleImageViewer(object):
             self.isopen = False
     def __del__(self):
         self.close()
+

@@ -78,6 +78,10 @@ class Scenario(BaseScenario):
         entity_pos = []
         for entity in world.landmarks:  # world.entities:
             entity_pos.append(entity.state.p_pos - agent.state.p_pos)
+            print("entity.state.p_pos:")
+            print(entity.state.p_pos)
+            print("agent.state.p_pos:")
+            print(agent.state.p_pos)
         # entity colors
         entity_color = []
         for entity in world.landmarks:  # world.entities:
