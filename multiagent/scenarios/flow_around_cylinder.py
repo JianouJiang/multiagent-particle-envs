@@ -41,6 +41,32 @@ def read_stopit_file():
         else:
             return 0
 
+def boundary_force_distribution(force_field):
+    # Initialize forces
+    force_north = np.array([0.0, 0.0])
+    force_south = np.array([0.0, 0.0])
+    force_west = np.array([0.0, 0.0])
+    force_east = np.array([0.0, 0.0])
+    
+    # Find boundaries
+    non_zero_indices = np.nonzero(force_field)
+    min_i, max_i = np.min(non_zero_indices[0]), np.max(non_zero_indices[0])
+    min_j, max_j = np.min(non_zero_indices[1]), np.max(non_zero_indices[1])
+    
+    # Calculate forces
+    for i in range(min_i, max_i + 1):
+        for j in range(min_j, max_j + 1):
+            if np.any(force_field[i][j] != 0):
+                if i == min_i:
+                    force_north += force_field[i][j]
+                elif i == max_i:
+                    force_south += force_field[i][j]
+                if j == min_j:
+                    force_west += force_field[i][j]
+                elif j == max_j:
+                    force_east += force_field[i][j]
+    
+    return [force_north, force_south, force_west, force_east]
 
 
 def surface_vector(boundary_mask, dA=0.1):
@@ -82,16 +108,20 @@ def compute_viscous_drag_force(ux, uy, boundary_mask, surface_vector_mask):
     F_drag_visc_x = tau_xx * surface_vector_mask[:,:,0] + tau_xy * surface_vector_mask[:,:,1]
     F_drag_visc_y = tau_xy * surface_vector_mask[:,:,0] + tau_yy * surface_vector_mask[:,:,1]
 
+    # Combine them
+    F_drag_visc = np.stack((F_drag_visc_x, F_drag_visc_y), axis=2)
+
     # Sum up the drag force over all cells
     total_drag_force_x = np.sum(F_drag_visc_x[boundary_mask == 1])
     total_drag_force_y = np.sum(F_drag_visc_y[boundary_mask == 1])
 
-    return total_drag_force_x, total_drag_force_y
+    return total_drag_force_x, total_drag_force_y, F_drag_visc
 
 # TODO: this is WRONG, need to modify later...
 def compute_drag(ux, uy, boundary_masks, rho=rho0, eta=nu):
     dA = np.sqrt(dx**2+dy**2) * np.sqrt(dx**2+dy**2)
     drag_dict = defaultdict(float)
+    drag_mask_dict = defaultdict(float)
     for idx, boundary_mask in enumerate(boundary_masks):
 
         # direction_mask = mark_velocity_direction(ux, uy, boundary_mask)
@@ -133,12 +163,20 @@ def compute_drag(ux, uy, boundary_masks, rho=rho0, eta=nu):
 
 
         # Compute viscous drag
-        total_drag_visc_x, total_drag_visc_y = compute_viscous_drag_force(ux, uy, boundary_mask, surface_vector_mask)
+        total_drag_visc_x, total_drag_visc_y, F_drag_visc = compute_viscous_drag_force(ux, uy, boundary_mask, surface_vector_mask)
         Drag_visc = np.sqrt(total_drag_visc_x ** 2 + total_drag_visc_y ** 2)
 
+        # Compute total drag
         drag_dict[idx] = Drag_pres + Drag_visc
 
-    return drag_dict
+        # Compute drag arrays
+        #drag_mask_dict[idx] = [F_drag_pres, F_drag_visc] 
+
+        drag_mask_dict[idx] = [x + y for x, y in zip(boundary_force_distribution(F_drag_pres), boundary_force_distribution(F_drag_visc))] # boundary_force_distribution returns [force_north, force_south, force_west, force_east] 
+        
+        
+
+    return drag_dict, drag_mask_dict
 
 
 def get_boundary_values(mask):
@@ -263,7 +301,7 @@ def compute_fluid_dynamics(circles, F_last_time_step=None, iteration=0):
         F[cylinders,:] = bndryF
 
         # Compute drag 
-        drags = compute_drag(ux, uy, boundary_masks, rho=rho0)
+        drags, drag_mask_dict = compute_drag(ux, uy, boundary_masks, rho=rho0)
 
         
         # print(ux.max())
@@ -278,8 +316,8 @@ def compute_fluid_dynamics(circles, F_last_time_step=None, iteration=0):
             plt.imshow(vorticity, cmap='bwr')
             plt.imshow(np.sqrt(ux**2+uy**2), cmap='bwr')
             plt.imshow(~cylinders, cmap='gray', alpha=0.3)
-            plt.clim(-.1, .1)
-            plt.title("drags="+str(drags)+" Iteration="+str(it) + " max ux={:.2f}".format(ux.max())+ " max uy={:.2f}".format(uy.max())+ " Re={:.2f}".format(Re))
+            plt.clim(-.1, .1)                                                                # this iteration is the number of agents*MAX_STEPS (in main.py), it is the number of rewards per game
+            plt.title("drags="+str({key: round(value, 2) for key, value in drags.items()})+" Iter="+str(iteration) + " max u=({:.2f}".format(ux.max())+ ",  {:.2f})".format(uy.max())+ " Re={:.1f}".format(Re))
             ax = plt.gca()
             ax.invert_yaxis()
             ax.get_xaxis().set_visible(False)
@@ -288,7 +326,8 @@ def compute_fluid_dynamics(circles, F_last_time_step=None, iteration=0):
             #plt.pause(0.001)
 
             # Save figure
-            filename = os.path.join(img_folder, f"latticeboltzmann{i:03d}.png")
+            print("saving time instances in img_folder:"+str(img_folder))
+            filename = os.path.join(img_folder, f"latticeboltzmann{iteration:03d}.png")
             plt.savefig(filename,dpi=240)
             #plt.show()
             
@@ -298,6 +337,6 @@ def compute_fluid_dynamics(circles, F_last_time_step=None, iteration=0):
 
 
         
-    return drags, F, ux, uy, cylinders
+    return drags, drag_mask_dict, F, ux, uy, cylinders
 
 

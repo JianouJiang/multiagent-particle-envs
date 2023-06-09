@@ -97,6 +97,8 @@ class World(object):
         # contact response parameters
         self.contact_force = 1e+2
         self.contact_margin = 1e-3
+        # x and y range is from -range_max to range_max
+        self.range_max = 1.0
 
     # return all entities in the world
     @property
@@ -166,7 +168,13 @@ class World(object):
                 if speed > entity.max_speed:
                     entity.state.p_vel = entity.state.p_vel / np.sqrt(np.square(entity.state.p_vel[0]) +
                                                                   np.square(entity.state.p_vel[1])) * entity.max_speed
-            entity.state.p_pos += entity.state.p_vel * self.dt
+            # Jianou: make sure the particles are within the boundaries
+            new_p_pos = entity.state.p_pos + entity.state.p_vel * self.dt
+            if -self.range_max < new_p_pos[0] < self.range_max and -self.range_max < new_p_pos[1] < self.range_max:
+                entity.state.p_pos += entity.state.p_vel * self.dt
+            else:
+                entity.state.p_pos = entity.state.p_pos
+
 
     def update_agent_state(self, agent):
         # set communication state (directly for now)

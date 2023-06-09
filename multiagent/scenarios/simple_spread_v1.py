@@ -20,6 +20,7 @@ class Scenario(BaseScenario):
         world.ux = None
         world.uy = None
         world.cylinders = None
+        world.drag_mask_dict = None
         for i, agent in enumerate(world.agents):
             agent.name = 'agent %d' % i
             agent.collide = True
@@ -89,13 +90,15 @@ class Scenario(BaseScenario):
         '''
         circles = [  ( (a.state.p_pos[0]+1)*150, (a.state.p_pos[1]+1)*50, a.size/2 * 50) for a in world.agents]
 
-        drag_dict, F,ux,uy, cylinders = compute_fluid_dynamics(circles, world.F, world.iteration)
+        drag_dict, drag_mask_dict, F,ux,uy, cylinders = compute_fluid_dynamics(circles, world.F, world.iteration)
+
         total_drags = sum(drag_dict.values())
         world.F = F
         world.iteration = world.iteration + 1
         world.ux = ux
         world.uy = uy
-        world.cylinders
+        world.cylinders = cylinders
+        world.drag_mask_dict = drag_mask_dict
 
         rew -= total_drags
 
@@ -104,6 +107,11 @@ class Scenario(BaseScenario):
                 if self.is_collision(a, agent):
                     rew -= 1
 
+        for a in world.agents:
+            if a.state.p_pos[0] <= -1+a.size or a.state.p_pos[0] >= 1-a.size or a.state.p_pos[1] <=-1+a.size or a.state.p_pos[1]>=1-a.size:
+                rew -= 10
+
+        print("total reward="+str(rew))
         return rew
 
     def observation(self, agent, world):
@@ -112,7 +120,17 @@ class Scenario(BaseScenario):
         entity_pos = []
         for entity in world.landmarks:  # world.entities:
             entity_pos.append(entity.state.p_pos - agent.state.p_pos)
-            
+        entity_pos = [np.append(arr, [np.mean(arr)]*6) for arr in entity_pos]
+        agents_drag = []
+        if world.drag_mask_dict!=None:
+            for drags in world.drag_mask_dict.values(): # world.drag_mask_dict:
+                agents_drag.append(drags)
+
+            agents_drag = [np.concatenate(sub_list) for sub_list in agents_drag]
+        else:
+            print("drags are zero!!!!!!!!!!!")
+            agents_drag = [np.zeros((int(4*world.dim_c) ,)) for _ in range(len(world.agents))]# e.g. shape=(3,8), there are 3 agents, getting their North, south, west, and east forces in x and y (8 forces)
+
         # entity colors
         entity_color = []
         for entity in world.landmarks:  # world.entities:
@@ -124,4 +142,8 @@ class Scenario(BaseScenario):
             if other is agent: continue
             comm.append(other.state.c)
             other_pos.append(other.state.p_pos - agent.state.p_pos)
-        return np.concatenate([agent.state.p_vel] + [agent.state.p_pos] + entity_pos + other_pos + comm)
+
+        #return np.concatenate([agent.state.p_vel] + [agent.state.p_pos] + entity_pos + other_pos + comm)
+        return np.concatenate([agent.state.p_vel] + [agent.state.p_pos] + agents_drag)
+
+
