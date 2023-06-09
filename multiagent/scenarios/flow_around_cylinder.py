@@ -3,6 +3,8 @@ import numpy as np
 from scipy.ndimage import convolve
 from collections import defaultdict
 from scipy.signal import convolve2d
+import os
+
 
 
 """
@@ -27,7 +29,7 @@ nu                     = (2*tau - 1) / 6  # kinematic viscosity
 initial_ux             = 1.8
 characteristic_length  = Ny/9 * 2
 Re                     = initial_ux * characteristic_length / nu / 50
-plotRealTime = False # switch on for plotting as the simulation goes along
+plotRealTime = True # switch on for plotting as the simulation goes along
 #circles = [(Nx/4, Ny/2, characteristic_length/2),  (Nx/3, Ny/2, characteristic_length/2)    ]
 
 
@@ -184,6 +186,13 @@ def check_overlap(circles):
 
 
 def compute_fluid_dynamics(circles, F_last_time_step=None, iteration=0):
+
+    # Get the absolute path to the current working directory
+    cwd = os.getcwd()
+    # Create the "img" folder if it doesn't exist
+    img_folder = os.path.join(cwd, "img")
+    os.makedirs(img_folder, exist_ok=True)
+
     """ Lattice Boltzmann Simulation """
     
     print("Re="+str(Re))
@@ -212,7 +221,7 @@ def compute_fluid_dynamics(circles, F_last_time_step=None, iteration=0):
     
     
     # Prep figure
-    fig = plt.figure(figsize=(6,2), dpi=80)
+    #fig = plt.figure(figsize=(6,2), dpi=80)
     
     # Simulation Main Loop
     for it in range(Nt):
@@ -277,14 +286,17 @@ def compute_fluid_dynamics(circles, F_last_time_step=None, iteration=0):
             ax.get_yaxis().set_visible(False)   
             ax.set_aspect('equal')  
             #plt.pause(0.001)
+
+            # Save figure
+            filename = os.path.join(img_folder, f"latticeboltzmann{i:03d}.png")
+            plt.savefig(filename,dpi=240)
+            #plt.show()
             
         
         if read_stopit_file()==1:
             break
 
-    # Save figure
-    plt.savefig('latticeboltzmann.png',dpi=240)
-    plt.show()
+
         
     return drags, F, ux, uy, cylinders
 
